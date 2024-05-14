@@ -80,6 +80,9 @@ static tid_t allocate_tid(void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = {0, 0x00af9a000000ffff, 0x00cf92000000ffff};
 
+// 우선순위 비교
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
 /* Initializes the threading system by transforming the code
 	 that's currently running into a thread.  This can't work in
 	 general and it is possible in this case only because loader.S
@@ -209,6 +212,12 @@ tid_t thread_create(const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock(t);
 
+	/* modify priority*/
+	if (t->priority > thread_get_priority())
+	{
+		thread_yield();
+	}
+
 	return tid;
 }
 
@@ -234,6 +243,14 @@ void thread_block(void)
 	 be important: if the caller had disabled interrupts itself,
 	 it may expect that it can atomically unblock a thread and
 	 update other data. */
+
+// 우선순위 비교
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *t1 = list_entry(a, struct thread, elem);
+	struct thread *t2 = list_entry(b, struct thread, elem);
+	return t1->priority > t2->priority;
+}
 void thread_unblock(struct thread *t)
 {
 	enum intr_level old_level;
@@ -242,7 +259,8 @@ void thread_unblock(struct thread *t)
 
 	old_level = intr_disable();
 	ASSERT(t->status == THREAD_BLOCKED);
-	list_push_back(&ready_list, &t->elem);
+	// list_push_back(&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level(old_level);
 }
@@ -305,11 +323,12 @@ void thread_yield(void)
 
 	ASSERT(!intr_context()); // 인터럽트 처리중에 호출되지 않았는지 확인
 
-	old_level = intr_disable();									// 현재 인터럽트 레벨을 비활성화 -> 다른 인터럽트의 방해 피하기 위해
-	if (curr != idle_thread)										// 현재 스레드가 idle이 아닐 경우
-		list_push_back(&ready_list, &curr->elem); // 준비리스트 뒤쪽에 추가
-	do_schedule(THREAD_READY);									// 스레드의 상태를 READY로 설정, 스케줄러 호출, 새로운 스레드를 선택하고 실행 (스레드가 자발적으로 CPU양보)
-	intr_set_level(old_level);									// 인터럽트 레벨 복원 -> 활성화
+	old_level = intr_disable(); // 현재 인터럽트 레벨을 비활성화 -> 다른 인터럽트의 방해 피하기 위해
+	if (curr != idle_thread)		// 현재 스레드가 idle이 아닐 경우
+		// list_push_back(&ready_list, &curr->elem); // 준비리스트 뒤쪽에 추가
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL); // 우선순위 확인하여 준비리스트에 삽입
+	do_schedule(THREAD_READY);																					 // 스레드의 상태를 READY로 설정, 스케줄러 호출, 새로운 스레드를 선택하고 실행 (스레드가 자발적으로 CPU양보)
+	intr_set_level(old_level);																					 // 인터럽트 레벨 복원 -> 활성화
 }
 
 // 두 스레드를 비교, list_elem 포인터를 실제 구조체로 변환 후 각 스레드의 wakeup_tick을 비교 a가 작으면 true
@@ -332,8 +351,9 @@ void thread_sleep(int64_t ticks)
 	old_level = intr_disable();																							// 인터럽트 비활성화 후 이전 레벨을 저장
 	curr->wakeup_tick = ticks;																							// 현재 스레드의 wakeup_tick 설정
 	list_insert_ordered(&sleep_list, &curr->elem, less_wake_up_tick, NULL); // 슬립 스레드에 순서대로 삽입
-	thread_block();																													// 스레드 차단하여 CPU양보
-	intr_set_level(old_level);																							// 인터럽트 레벨 복원
+	// list_push_back(&sleep_list, &curr->elem); // 슬립 스레드 뒤에다가 삽입
+	thread_block();						 // 스레드 차단하여 CPU양보
+	intr_set_level(old_level); // 인터럽트 레벨 복원
 }
 
 void thread_wake_up(int64_t ticks)
@@ -357,7 +377,14 @@ void thread_wake_up(int64_t ticks)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority)
 {
-	thread_current()->priority = new_priority;
+	// thread_current()->priority = new_priority;
+	int old_priority = thread_current()->priority; // 원래 우선순위를 저장해 둔다
+	thread_current()->priority = new_priority;		 // 새로 들어온 우선순위를 현재 우선순위로
+
+	if (new_priority < old_priority) // 현재 스레드가 실행 중인 상태에서 우선순위가 감소 하면
+	{
+		thread_yield(); // 스케줄러에게 현재 스레드를 준비 리스트의 적절한 위치로 이동시키고, 더 높은 우선순위를 가진 스레드에게 CPU를 넘김
+	}
 }
 
 /* Returns the current thread's priority. */
