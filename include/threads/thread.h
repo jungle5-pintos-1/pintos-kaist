@@ -146,4 +146,7 @@ int thread_get_load_avg(void);
 
 void do_iret(struct intr_frame *tf);
 
+// 우선순위 비교
+bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void preempt_priority(void); // ready에 있는 스레드가 현재 실행되는 스레드 보다 우선순위가 높으면 교체
 #endif /* threads/thread.h */
