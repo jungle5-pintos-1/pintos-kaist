@@ -78,21 +78,26 @@
  * - "interior element": An element that is not the head or
  * tail, that is, a real list element.  An empty list does
  * not have any interior elements.*/
-
+/*
+   이 코드는 C 언어로 작성된 이중 연결 리스트를 위한 라이브러리입니다. 이중 연결 리스트는 각 요소가 이전 요소와 다음 요소를 가리키는 링크를 포함하므로,
+   리스트의 앞쪽과 뒤쪽에서 모두 쉽게 접근할 수 있습니다.
+   이 라이브러리는 동적 메모리 할당을 사용하지 않고, 사용자 정의 구조체 내에 list_elem 구조체를 내장시키는 방식으로 작동합니다.*/
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 /* List element. */
-struct list_elem {
-	struct list_elem *prev;     /* Previous list element. */
-	struct list_elem *next;     /* Next list element. */
+struct list_elem
+{
+   struct list_elem *prev; /* Previous list element. */
+   struct list_elem *next; /* Next list element. */
 };
 
 /* List. */
-struct list {
-	struct list_elem head;      /* List head. */
-	struct list_elem tail;      /* List tail. */
+struct list
+{
+   struct list_elem head; /* List head. */
+   struct list_elem tail; /* List tail. */
 };
 
 /* Converts pointer to list element LIST_ELEM into a pointer to
@@ -100,64 +105,64 @@ struct list {
    name of the outer structure STRUCT and the member name MEMBER
    of the list element.  See the big comment at the top of the
    file for an example. */
-#define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
-	((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
-		- offsetof (STRUCT, MEMBER.next)))
+// 리스트 요소(list_elem)의 포인터로 부터 이 요소가 포함된 상위 구조체의 포인터를 얻는 데 사용
+#define list_entry(LIST_ELEM, STRUCT, MEMBER) \
+   ((STRUCT *)((uint8_t *)&(LIST_ELEM)->next - offsetof(STRUCT, MEMBER.next)))
 
-void list_init (struct list *);
+void list_init(struct list *);
 
 /* List traversal. */
-struct list_elem *list_begin (struct list *);
-struct list_elem *list_next (struct list_elem *);
-struct list_elem *list_end (struct list *);
+struct list_elem *list_begin(struct list *);
+struct list_elem *list_next(struct list_elem *);
+struct list_elem *list_end(struct list *);
 
-struct list_elem *list_rbegin (struct list *);
-struct list_elem *list_prev (struct list_elem *);
-struct list_elem *list_rend (struct list *);
+struct list_elem *list_rbegin(struct list *);
+struct list_elem *list_prev(struct list_elem *);
+struct list_elem *list_rend(struct list *);
 
-struct list_elem *list_head (struct list *);
-struct list_elem *list_tail (struct list *);
+struct list_elem *list_head(struct list *);
+struct list_elem *list_tail(struct list *);
 
 /* List insertion. */
-void list_insert (struct list_elem *, struct list_elem *);
-void list_splice (struct list_elem *before,
-		struct list_elem *first, struct list_elem *last);
-void list_push_front (struct list *, struct list_elem *);
-void list_push_back (struct list *, struct list_elem *);
+void list_insert(struct list_elem *, struct list_elem *);
+void list_splice(struct list_elem *before,
+                 struct list_elem *first, struct list_elem *last);
+void list_push_front(struct list *, struct list_elem *);
+void list_push_back(struct list *, struct list_elem *);
 
 /* List removal. */
-struct list_elem *list_remove (struct list_elem *);
-struct list_elem *list_pop_front (struct list *);
-struct list_elem *list_pop_back (struct list *);
+struct list_elem *list_remove(struct list_elem *);
+struct list_elem *list_pop_front(struct list *);
+struct list_elem *list_pop_back(struct list *);
 
 /* List elements. */
-struct list_elem *list_front (struct list *);
-struct list_elem *list_back (struct list *);
+struct list_elem *list_front(struct list *);
+struct list_elem *list_back(struct list *);
 
 /* List properties. */
-size_t list_size (struct list *);
-bool list_empty (struct list *);
+size_t list_size(struct list *);
+bool list_empty(struct list *);
 
 /* Miscellaneous. */
-void list_reverse (struct list *);
+void list_reverse(struct list *);
 
 /* Compares the value of two list elements A and B, given
    auxiliary data AUX.  Returns true if A is less than B, or
    false if A is greater than or equal to B. */
-typedef bool list_less_func (const struct list_elem *a,
-                             const struct list_elem *b,
-                             void *aux);
+typedef bool list_less_func(const struct list_elem *a,
+                            const struct list_elem *b,
+                            void *aux);
 
 /* Operations on lists with ordered elements. */
-void list_sort (struct list *,
-                list_less_func *, void *aux);
-void list_insert_ordered (struct list *, struct list_elem *,
-                          list_less_func *, void *aux);
-void list_unique (struct list *, struct list *duplicates,
-                  list_less_func *, void *aux);
+void list_sort(struct list *,
+               list_less_func *, void *aux);
+void list_insert_ordered(struct list *, struct list_elem *,
+                         list_less_func *, void *aux);
+void list_unique(struct list *, struct list *duplicates,
+                 list_less_func *, void *aux);
 
 /* Max and min. */
-struct list_elem *list_max (struct list *, list_less_func *, void *aux);
-struct list_elem *list_min (struct list *, list_less_func *, void *aux);
+struct list_elem *list_max(struct list *, list_less_func *, void *aux);
+struct list_elem *list_min(struct list *, list_less_func *, void *aux);
 
 #endif /* lib/kernel/list.h */
