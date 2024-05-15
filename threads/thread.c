@@ -213,10 +213,7 @@ tid_t thread_create(const char *name, int priority,
 	thread_unblock(t);
 
 	/* modify priority*/
-	if (t->priority > thread_get_priority())
-	{
-		thread_yield();
-	}
+	preempt_priority();
 
 	return tid;
 }
@@ -358,6 +355,8 @@ void thread_sleep(int64_t ticks)
 
 void thread_wake_up(int64_t ticks)
 {
+	enum intr_level old_level;
+	old_level = intr_disable();
 	struct list_elem *e = list_begin(&sleep_list); // 슬립리스트의 시작 엘리멘트 포인터
 	while (e != list_end(&sleep_list))						 // 시작부터 끝까지 순회
 	{
@@ -366,25 +365,23 @@ void thread_wake_up(int64_t ticks)
 		{
 			e = list_remove(e); // 지우고 다음 스레드를 가리킨다
 			thread_unblock(t);	// 스레드 상태를 BLOCKED 에서 READY로 변경
+			preempt_priority();
 		}
 		else
 		{
-			e = list_next(e); // 아니면 다음스레드로
+			break;
 		}
 	}
+	intr_set_level(old_level);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority)
 {
-	// thread_current()->priority = new_priority;
-	int old_priority = thread_current()->priority; // 원래 우선순위를 저장해 둔다
-	thread_current()->priority = new_priority;		 // 새로 들어온 우선순위를 현재 우선순위로
+	struct thread *current_thread = thread_current(); // 현재 스레드 가져오기
+	current_thread->priority = new_priority;					// 새로 들어온 우선순위를 현재 우선순위로
 
-	if (new_priority < old_priority) // 현재 스레드가 실행 중인 상태에서 우선순위가 감소 하면
-	{
-		thread_yield(); // 스케줄러에게 현재 스레드를 준비 리스트의 적절한 위치로 이동시키고, 더 높은 우선순위를 가진 스레드에게 CPU를 넘김
-	}
+	preempt_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -670,4 +667,21 @@ allocate_tid(void)
 	lock_release(&tid_lock);
 
 	return tid;
+}
+
+void preempt_priority(void)
+{
+	if (thread_current() == idle_thread)
+		return;
+	if (list_empty(&ready_list))
+	{
+		return;
+	}
+	struct thread *curr = thread_current();
+	struct thread *ready = list_entry(list_front(&ready_list), struct thread, elem);
+	// ready에 현재 실행중이 스레드보다 우선순위가 높은 스레드가 있으면 CPU할당
+	if (curr->priority < ready->priority)
+	{
+		thread_yield();
+	}
 }
