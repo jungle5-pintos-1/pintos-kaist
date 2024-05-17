@@ -98,6 +98,11 @@ struct thread
 
 	int64_t wakeup_tick;
 
+	int init_priority;							// donation이 종료될 때 기존의 priority로 돌아오기 위한 필드
+	struct lock *wait_on_lock;			// 스레드가 요청했지만 다른 스레드가 점유하고 있어서 획득하지 못하고 기다리는 lock
+	struct list donations;					// lock을 요청하면서 priority를 기부한 스레드들
+	struct list_elem donation_elem; // donations에 들어가기위한 elem
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
@@ -149,4 +154,10 @@ void do_iret(struct intr_frame *tf);
 // 우선순위 비교
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void preempt_priority(void); // ready에 있는 스레드가 현재 실행되는 스레드 보다 우선순위가 높으면 교체
+
+bool cmp_d_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void donate_priority(void);
+void remove_donor(struct lock *lock);
+void update_priority_before_donations(void);
+
 #endif /* threads/thread.h */
