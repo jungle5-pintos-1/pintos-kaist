@@ -379,8 +379,8 @@ void thread_wake_up(int64_t ticks)
 void thread_set_priority(int new_priority)
 {
 	struct thread *current_thread = thread_current(); // 현재 스레드 가져오기
-	current_thread->priority = new_priority;					// 새로 들어온 우선순위를 현재 우선순위로
-
+	current_thread->init_priority = new_priority;			// 새로 들어온 우선순위를 현재 우선순위로
+	update_priority_before_donations(); // thread의 우선순위가 변경되면 donaitons 정보를 갱신 
 	preempt_priority();
 }
 
@@ -482,6 +482,10 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	t->init_priority = priority; // 오리지널 우선순위
+	t->wait_on_lock = NULL;
+	list_init(&(t->donations));
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
