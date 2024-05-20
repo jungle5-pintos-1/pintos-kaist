@@ -61,6 +61,7 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+int64_t earliest_wakeup_tick = 9223372036854775807;
 int load_avg;
 
 static void kernel_thread(thread_func *, void *aux);
@@ -86,6 +87,9 @@ static tid_t allocate_tid(void);
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
 static uint64_t gdt[3] = {0, 0x00af9a000000ffff, 0x00cf92000000ffff};
+
+// 기상시간 비교
+bool cmp_earlier_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 // 우선순위 비교
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
@@ -258,6 +262,13 @@ void thread_block(void)
 	 it may expect that it can atomically unblock a thread and
 	 update other data. */
 
+bool cmp_earlier_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	struct thread *t1 = list_entry(a, struct thread, elem);
+	struct thread *t2 = list_entry(b, struct thread, elem);
+	return t1->wakeup_tick < t2->wakeup_tick;
+}
+
 // 우선순위 비교
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
@@ -362,7 +373,16 @@ void thread_sleep(int64_t ticks)
 	if (curr == idle_thread) // 현재 스레드가 유휴 스레드이면 종료
 		return;
 
-	old_level = intr_disable();																							// 인터럽트 비활성화 후 이전 레벨을 저장
+	old_level = intr_disable();		
+	
+	if(earliest_wakeup_tick == 9223372036854775807){
+		earliest_wakeup_tick = ticks;
+	}
+	else{
+		if(ticks < earliest_wakeup_tick){
+			earliest_wakeup_tick = ticks;
+		}
+	}																					// 인터럽트 비활성화 후 이전 레벨을 저장
 	curr->wakeup_tick = ticks;																							// 현재 스레드의 wakeup_tick 설정
 	list_insert_ordered(&sleep_list, &curr->elem, less_wake_up_tick, NULL); // 슬립 스레드에 순서대로 삽입
 	// list_push_back(&sleep_list, &curr->elem); // 슬립 스레드 뒤에다가 삽입
@@ -372,13 +392,16 @@ void thread_sleep(int64_t ticks)
 
 void thread_wake_up(int64_t ticks)
 {
+	if(ticks < earliest_wakeup_tick){
+		return;
+	}
 	enum intr_level old_level;
 	old_level = intr_disable();
 	struct list_elem *e = list_begin(&sleep_list); // 슬립리스트의 시작 엘리멘트 포인터
 	while (e != list_end(&sleep_list))						 // 시작부터 끝까지 순회
 	{
 		struct thread *t = list_entry(e, struct thread, elem); // e가 가리키는 thread 구조체
-		if (t->wakeup_tick <= ticks)													 // wakeup_tick이 현재 ticks보다 작거나 같으면
+		if (t->wakeup_tick <= ticks) // wakeup_tick이 현재 ticks보다 작거나 같으면
 		{
 			e = list_remove(e); // 지우고 다음 스레드를 가리킨다
 			thread_unblock(t);	// 스레드 상태를 BLOCKED 에서 READY로 변경
@@ -391,6 +414,14 @@ void thread_wake_up(int64_t ticks)
 		{
 			break;
 		}
+	}
+	// sleep list에 남은 스레드 중에서 가장 이른 기상시간으로 갱신
+	if(!list_empty(&sleep_list)){
+		earliest_wakeup_tick = list_entry(list_min(&sleep_list, cmp_earlier_ticks, NULL), struct thread, elem)->wakeup_tick;
+	}
+	// sleep list가 비어있다면
+	else{
+		earliest_wakeup_tick = 9223372036854775807;
 	}
 	intr_set_level(old_level);
 }

@@ -33,6 +33,9 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
+/* global variable */
+int64_t earliest_wakeup_tick;
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
