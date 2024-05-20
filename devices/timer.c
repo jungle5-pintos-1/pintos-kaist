@@ -144,13 +144,26 @@ void timer_print_stats(void)
 }
 
 /* Timer interrupt handler. */
-// 터이머 인터럽트가 발생할 때마다 호출되어 'ticks' 변수를 증가시키고, 스레드 관리자를 통해 스레드의 타이밍을 조정
+// 타이머 인터럽트가 발생할 때마다 호출되어 'ticks' 변수를 증가시키고, 스레드 관리자를 통해 스레드의 타이밍을 조정
 static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
 	ticks++;
 	thread_tick();
-	thread_wake_up(timer_ticks());
+	if (thread_mlfqs)
+	{
+		mlfqs_increment_recent_cpu();
+		if (ticks % 4 == 0)
+		{
+			mlfqs_recalculate_priority();
+			if (ticks % TIMER_FREQ == 0)
+			{
+				mlfqs_recalculate_recent_cpu();
+				mlfqs_calculate_load_avg();
+			}
+		}
+	}
+	thread_wake_up(ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
