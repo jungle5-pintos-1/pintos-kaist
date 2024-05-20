@@ -67,13 +67,13 @@ void sema_down(struct semaphore *sema)
 	ASSERT(!intr_context());
 
 	old_level = intr_disable();
-	while (sema->value == 0)
+	while (sema->value == 0) // 세마포어 값이 0일경우, 세마포어 값이 양수가 될 때 까지 대기
 	{
 		// list_push_back (&sema->waiters, &thread_current ()->elem);
 		list_insert_ordered(&sema->waiters, &thread_current()->elem, cmp_priority, NULL);
-		thread_block();
+		thread_block(); // 스레드는 대기상태로
 	}
-	sema->value--;
+	sema->value--; // 값이 양수가 되면, 1 감소
 	intr_set_level(old_level);
 }
 

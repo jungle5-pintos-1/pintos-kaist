@@ -415,6 +415,7 @@ int thread_get_priority(void)
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED)
 {
+	// 현재 스레드의 nice 값을 새 값으로 설정
 	enum intr_level old_level = intr_disable();
 	thread_current()->nice = nice;
 	mlfqs_calculate_priority(thread_current());
@@ -425,6 +426,7 @@ void thread_set_nice(int nice UNUSED)
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
+	// 현재 스레드의 nice 값을 반환
 	enum intr_level old_level = intr_disable();
 	int nice = thread_current()->nice;
 	intr_set_level(old_level);
@@ -434,6 +436,7 @@ int thread_get_nice(void)
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
+	// 현재 시스템의 load_avg * 100 값을 반환
 	enum intr_level old_level = intr_disable();
 	int load_avg_value = fp_to_int_round(mult_mixed(load_avg, 100));
 	intr_set_level(old_level);
@@ -444,6 +447,7 @@ int thread_get_load_avg(void)
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
+	// 현재 스레드의 recent_cpu * 100 값을 반환
 	enum intr_level old_level = intr_disable();
 	int recent_cpu = fp_to_int_round(mult_mixed(thread_current()->recent_cpu, 100));
 	intr_set_level(old_level);
@@ -523,7 +527,8 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
-	list_push_back(&all_list, &t->all_elem);
+	list_push_back(&all_list, &t->all_elem); // 새 리스트를 만들면 초기화
+																					 // main스레드는 thread_start()를 실행하지 않으므로
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -734,6 +739,7 @@ void mlfqs_calculate_priority(struct thread *t)
 {
 	if (t == idle_thread)
 		return;
+	// fp 연산 함수를 사용하여 계산 결과의 소수 부분은 버리고 정수의 priority로 설정
 	t->priority = fp_to_int(add_mixed(div_mixed(t->recent_cpu, -4), PRI_MAX - t->nice * 2));
 }
 
@@ -765,10 +771,21 @@ void mlfqs_increment_recent_cpu(void)
 
 void mlfqs_recalculate_recent_cpu(void)
 {
+	/*
+	e: 이것은 list_elem 구조체의 포인터입니다.
+	list_elem은 연결 리스트에서 각 아이템을 연결하는 데 사용되는 구조체입니다.
+	이는 연결 리스트의 노드 역할을 하며,
+	실제 데이터(여기서는 thread 구조체)는 이 노드 내에 포함되어 있지 않습니다.
+	*/
 	struct list_elem *e;
 
 	for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
 	{
+		/*
+		t: 이것은 thread 구조체의 포인터입니다.
+		thread 구조체는 스레드에 대한 정보를 저장합니다.
+		여기에는 스레드의 상태, 우선 순위, 스케줄링 관련 정보 등이 포함될 수 있습니다.
+		*/
 		struct thread *t = list_entry(e, struct thread, all_elem);
 		mlfqs_calculate_recent_cpu(t);
 	}

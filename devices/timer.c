@@ -156,7 +156,7 @@ timer_interrupt(struct intr_frame *args UNUSED)
 		if (ticks % 4 == 0)
 		{
 			mlfqs_recalculate_priority();
-			if (ticks % TIMER_FREQ == 0)
+			if (ticks % TIMER_FREQ == 0) // TIMER_FREQ : 1초에 몇 개의 ticks가 실행되는지 (초기값 : 100)
 			{
 				mlfqs_recalculate_recent_cpu();
 				mlfqs_calculate_load_avg();

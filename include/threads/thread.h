@@ -112,7 +112,7 @@ struct thread
 	int nice;
 	int recent_cpu;
 	struct list_elem all_elem;
-	struct list all_list;
+	struct list all_list; // 생성되는 모든 리스트
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
