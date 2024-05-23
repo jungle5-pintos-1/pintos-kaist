@@ -224,8 +224,6 @@ tid_t thread_create(const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock(t);
 
-	/* modify priority*/
-
 	/* modify priority if not MLFQS */
 	if (!thread_mlfqs)
 	{
