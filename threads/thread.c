@@ -61,7 +61,6 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
 	 Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
-int64_t earliest_wakeup_tick = 9223372036854775807;
 int load_avg;
 
 static void kernel_thread(thread_func *, void *aux);
@@ -87,9 +86,6 @@ static tid_t allocate_tid(void);
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
 static uint64_t gdt[3] = {0, 0x00af9a000000ffff, 0x00cf92000000ffff};
-
-// 기상시간 비교
-bool cmp_earlier_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 // 우선순위 비교
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
@@ -228,8 +224,6 @@ tid_t thread_create(const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock(t);
 
-	/* modify priority*/
-
 	/* modify priority if not MLFQS */
 	if (!thread_mlfqs)
 	{
@@ -261,13 +255,6 @@ void thread_block(void)
 	 be important: if the caller had disabled interrupts itself,
 	 it may expect that it can atomically unblock a thread and
 	 update other data. */
-
-bool cmp_earlier_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
-	struct thread *t1 = list_entry(a, struct thread, elem);
-	struct thread *t2 = list_entry(b, struct thread, elem);
-	return t1->wakeup_tick < t2->wakeup_tick;
-}
 
 // 우선순위 비교
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
@@ -373,16 +360,7 @@ void thread_sleep(int64_t ticks)
 	if (curr == idle_thread) // 현재 스레드가 유휴 스레드이면 종료
 		return;
 
-	old_level = intr_disable();		
-	
-	if(earliest_wakeup_tick == 9223372036854775807){
-		earliest_wakeup_tick = ticks;
-	}
-	else{
-		if(ticks < earliest_wakeup_tick){
-			earliest_wakeup_tick = ticks;
-		}
-	}																					// 인터럽트 비활성화 후 이전 레벨을 저장
+	old_level = intr_disable();																							// 인터럽트 비활성화 후 이전 레벨을 저장
 	curr->wakeup_tick = ticks;																							// 현재 스레드의 wakeup_tick 설정
 	list_insert_ordered(&sleep_list, &curr->elem, less_wake_up_tick, NULL); // 슬립 스레드에 순서대로 삽입
 	// list_push_back(&sleep_list, &curr->elem); // 슬립 스레드 뒤에다가 삽입
@@ -392,16 +370,13 @@ void thread_sleep(int64_t ticks)
 
 void thread_wake_up(int64_t ticks)
 {
-	if(ticks < earliest_wakeup_tick){
-		return;
-	}
 	enum intr_level old_level;
 	old_level = intr_disable();
 	struct list_elem *e = list_begin(&sleep_list); // 슬립리스트의 시작 엘리멘트 포인터
 	while (e != list_end(&sleep_list))						 // 시작부터 끝까지 순회
 	{
 		struct thread *t = list_entry(e, struct thread, elem); // e가 가리키는 thread 구조체
-		if (t->wakeup_tick <= ticks) // wakeup_tick이 현재 ticks보다 작거나 같으면
+		if (t->wakeup_tick <= ticks)													 // wakeup_tick이 현재 ticks보다 작거나 같으면
 		{
 			e = list_remove(e); // 지우고 다음 스레드를 가리킨다
 			thread_unblock(t);	// 스레드 상태를 BLOCKED 에서 READY로 변경
@@ -414,14 +389,6 @@ void thread_wake_up(int64_t ticks)
 		{
 			break;
 		}
-	}
-	// sleep list에 남은 스레드 중에서 가장 이른 기상시간으로 갱신
-	if(!list_empty(&sleep_list)){
-		earliest_wakeup_tick = list_entry(list_min(&sleep_list, cmp_earlier_ticks, NULL), struct thread, elem)->wakeup_tick;
-	}
-	// sleep list가 비어있다면
-	else{
-		earliest_wakeup_tick = 9223372036854775807;
 	}
 	intr_set_level(old_level);
 }
@@ -446,6 +413,7 @@ int thread_get_priority(void)
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED)
 {
+	// 현재 스레드의 nice 값을 새 값으로 설정
 	enum intr_level old_level = intr_disable();
 	thread_current()->nice = nice;
 	mlfqs_calculate_priority(thread_current());
@@ -456,6 +424,7 @@ void thread_set_nice(int nice UNUSED)
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
+	// 현재 스레드의 nice 값을 반환
 	enum intr_level old_level = intr_disable();
 	int nice = thread_current()->nice;
 	intr_set_level(old_level);
@@ -465,6 +434,7 @@ int thread_get_nice(void)
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
+	// 현재 시스템의 load_avg * 100 값을 반환
 	enum intr_level old_level = intr_disable();
 	int load_avg_value = fp_to_int_round(mult_mixed(load_avg, 100));
 	intr_set_level(old_level);
@@ -475,6 +445,7 @@ int thread_get_load_avg(void)
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
+	// 현재 스레드의 recent_cpu * 100 값을 반환
 	enum intr_level old_level = intr_disable();
 	int recent_cpu = fp_to_int_round(mult_mixed(thread_current()->recent_cpu, 100));
 	intr_set_level(old_level);
@@ -554,7 +525,8 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
-	list_push_back(&all_list, &t->all_elem);
+	list_push_back(&all_list, &t->all_elem); // 새 리스트를 만들면 초기화
+																					 // main스레드는 thread_start()를 실행하지 않으므로
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -765,6 +737,7 @@ void mlfqs_calculate_priority(struct thread *t)
 {
 	if (t == idle_thread)
 		return;
+	// fp 연산 함수를 사용하여 계산 결과의 소수 부분은 버리고 정수의 priority로 설정
 	t->priority = fp_to_int(add_mixed(div_mixed(t->recent_cpu, -4), PRI_MAX - t->nice * 2));
 }
 
@@ -796,10 +769,21 @@ void mlfqs_increment_recent_cpu(void)
 
 void mlfqs_recalculate_recent_cpu(void)
 {
+	/*
+	e: 이것은 list_elem 구조체의 포인터입니다.
+	list_elem은 연결 리스트에서 각 아이템을 연결하는 데 사용되는 구조체입니다.
+	이는 연결 리스트의 노드 역할을 하며,
+	실제 데이터(여기서는 thread 구조체)는 이 노드 내에 포함되어 있지 않습니다.
+	*/
 	struct list_elem *e;
 
 	for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
 	{
+		/*
+		t: 이것은 thread 구조체의 포인터입니다.
+		thread 구조체는 스레드에 대한 정보를 저장합니다.
+		여기에는 스레드의 상태, 우선 순위, 스케줄링 관련 정보 등이 포함될 수 있습니다.
+		*/
 		struct thread *t = list_entry(e, struct thread, all_elem);
 		mlfqs_calculate_recent_cpu(t);
 	}

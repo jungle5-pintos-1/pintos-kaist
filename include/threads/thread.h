@@ -33,9 +33,6 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
-/* global variable */
-int64_t earliest_wakeup_tick;
-
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -115,7 +112,7 @@ struct thread
 	int nice;
 	int recent_cpu;
 	struct list_elem all_elem;
-	struct list all_list;
+	struct list all_list; // 생성되는 모든 리스트
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
