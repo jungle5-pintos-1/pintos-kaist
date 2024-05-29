@@ -27,6 +27,11 @@ static bool load(const char *file_name, struct intr_frame *if_);
 static void initd(void *f_name);
 static void __do_fork(void *);
 
+void argument_stack(char **parse, int count, void **rsp);
+int process_add_file(struct file *file);
+struct file *process_get_file(int fd);
+void process_close_file(int fd);
+
 /* General process initializer for initd and other process. */
 static void
 process_init(void)
@@ -215,7 +220,7 @@ int process_exec(void *f_name)
 	_if.R.rdi = count;											// rdi에는 argc인 인자 개수
 	_if.R.rsi = (char *)_if.rsp + 8;				// rsi에는 인자의 시작 주소
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트/
 
 	/* If load failed, quit. */
 	// 실패하면 메모리 페이지 해제하고 -1 반환, exit() 추가?
@@ -281,9 +286,12 @@ int process_wait(tid_t child_tid UNUSED)
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while (child_tid)
-	{
-	}
+	for (int i = 0; i < 1000000000; i++)
+		;
+	// while (child_tid)
+	// {
+	// }
+
 	return -1;
 }
 
@@ -327,6 +335,49 @@ process_cleanup(void)
 		pml4_activate(NULL);
 		pml4_destroy(pml4);
 	}
+}
+
+/* Project 2 - system-call */
+/* 파일 객체에 대한 파일 디스크립터를 생성하는 함수 */
+int process_add_file(struct file *file)
+{
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->file_descriptor_table;
+
+	// FDT 한계와 같지 않을때 까지 fdidx값을 증가시킨다
+	while (curr->fdidx < FDT_COUNT_LIMIT && fdt[curr->fdidx])
+	{
+		curr->fdidx++;
+	}
+	if (curr->fdidx >= FDT_COUNT_LIMIT)
+	{
+		return -1;
+	}
+	fdt[curr->fdidx] = file; // 빈자리에 f를 넣고
+	return curr->fdidx;			 // fd 반환
+}
+
+/* 파일 객체를 검색하는 함수 */
+struct file *process_get_file(int fd)
+{
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->file_descriptor_table;
+
+	if (fd < 2 || fd >= FDT_COUNT_LIMIT) // fd가 2보다 작거나 한계만큼 크면 NULL
+	{
+		return NULL;
+	}
+	return fdt[fd]; // 파일 디스크립터에 해당하는 파일 객체를 리턴
+}
+
+// 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
+void process_close_file(int fd)
+{
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->file_descriptor_table;
+	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+		return NULL;
+	fdt[fd] = NULL; // fd에 해당하는 index에 NULL값
 }
 
 /* Sets up the CPU for running user code in the nest thread.

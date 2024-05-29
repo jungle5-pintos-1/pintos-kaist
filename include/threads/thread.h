@@ -33,6 +33,10 @@ typedef int tid_t;
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
 
+/* Project 2 */
+#define FDT_PAGES 2
+#define FDT_COUNT_LIMIT 128
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -126,6 +130,11 @@ struct thread
 	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;				/* Detects stack overflow. */
+
+	/* Project2 : User programs - system call - */
+	int exit_status;										 // exit(), wait() 구현 때 사용
+	struct file **file_descriptor_table; // FDT
+	int fdidx;													 // fd index
 };
 
 /* If false (default), use round-robin scheduler.
