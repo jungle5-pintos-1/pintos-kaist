@@ -286,7 +286,7 @@ int process_wait(tid_t child_tid UNUSED)
 	// }
 
   /* --- 일정 시간 지난 후 정지 --- */
-  for (int i = 0; i < 100000000; i++)
+  for (int i = 0; i < 100000000000; i++)
   {
   }
 

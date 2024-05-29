@@ -80,7 +80,7 @@ int main(void) {
 
   /* Initialize ourselves as a thread so we can use locks,
            then enable console locking. */
-  thread_init();  // 스레드로 자신을 초기화하여 잠금을 사용할 수 있게 한다
+  thread_init();  // 스레드 시스템, lock, run queue 초기화
   console_init();  // 콘솔 잠금을 활성화
 
   /* Initialize memory system. */
@@ -99,8 +99,8 @@ int main(void) {
   kbd_init();    // 키보드 초기화
   input_init();  // 입력 장치 초기화
 #ifdef USERPROG
-  exception_init();
-  syscall_init();
+  exception_init(); // 예외헨들러 초기화
+  syscall_init(); // 시스템콜 인터페이스 초기화
 #endif
   /* Start thread scheduler and enable interrupts. */
   thread_start();  // 스레드 스케줄러 시작
