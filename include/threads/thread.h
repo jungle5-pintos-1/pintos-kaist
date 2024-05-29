@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -135,6 +136,14 @@ struct thread
 	int exit_status;										 // exit(), wait() 구현 때 사용
 	struct file **file_descriptor_table; // FDT
 	int fdidx;													 // fd index
+
+	struct intr_frame parent_if; // 부모 프로세스의 유저 스택 정보를 담아야 한다.
+	struct list child_list;			 // 자식 프로세스 리스트
+	struct list_elem child_elem; // 자식 리스트 요소
+
+	struct semaphore load_sema;
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
 };
 
 /* If false (default), use round-robin scheduler.

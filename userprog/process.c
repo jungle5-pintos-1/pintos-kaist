@@ -18,6 +18,8 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "threads/synch.h"
+#include "userprog/syscall.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -31,6 +33,8 @@ void argument_stack(char **parse, int count, void **rsp);
 int process_add_file(struct file *file);
 struct file *process_get_file(int fd);
 void process_close_file(int fd);
+
+struct thread *get_child_process(int pid);
 
 /* General process initializer for initd and other process. */
 static void
@@ -96,8 +100,46 @@ initd(void *f_name)
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
-	return thread_create(name,
-											 PRI_DEFAULT, __do_fork, thread_current());
+	// 현재 스레드의 parent_if에 복제해야하는 if_를 복사한다
+	struct thread *cur = thread_current();
+	memcpy(&cur->parent_if, if_, sizeof(struct intr_frame));
+
+	// 현재 스레드를 fork한 new 스레드를 생성
+	tid_t pid = thread_create(name,
+														PRI_DEFAULT, __do_fork, thread_current()); // __do_fork 는 부모 프로세스의 내용을 자식 프로세스로 복사하는 함수
+	if (pid == TID_ERROR)
+	{
+		return TID_ERROR;
+	}
+
+	// 자식이 로드될 때까지 대기하기 위해서 방금 생성한 자식 스레드를 찾는다.
+	// load가 완료될 때까지 부모를 재워야 하기 때문에 semaphore 이용
+	struct thread *child = get_child_process(pid);
+
+	// 현재 스레드는 생성만 완료된 상태
+	// ready_list에서 실행될 때 __do_fork가 실행된다
+	// 로드가 완료될 때 까지 부모 대기
+	sema_down(&child->load_sema);
+
+	return pid; // 자식프로세스의 pid 반환
+}
+
+/* pid를 인자로 받아 자식 스레드를 반환하는 함수 */
+struct thread *get_child_process(int pid)
+{
+	// 자식 리스트에 접근하여 프로세스 디스크립터 검색
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_list;
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		// 해당 pid가 존재하면 프로세스 디스크립터(프로세스 포인터) 반환
+		if (t->tid == pid)
+		{
+			return t;
+		}
+	}
+	return NULL; // 없으면 NULL 반환
 }
 
 #ifndef VM
@@ -113,22 +155,38 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if (is_kernel_vaddr(va))
+	{
+		return true;
+	}
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent->pml4, va);
+	if (parent_page == NULL)
+	{
+		return false;
+	}
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO); // 비트연산자 OR
+	if (newpage == NULL)
+	{
+		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
@@ -138,6 +196,7 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
+// Userland context : 유저 모드에서 실행 중인 프로세스의 상태와 관련된 정보
 static void
 __do_fork(void *aux)
 {
@@ -145,11 +204,12 @@ __do_fork(void *aux)
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	if_.R.rax = 0; // 자식 프로세스의 리턴값은 0
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -171,14 +231,29 @@ __do_fork(void *aux)
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+	// 자식 프로세스의 FDT는 부모의 FDT와 동일하게 해줘야 한다.
+	current->file_descriptor_table[0] = parent->file_descriptor_table[0];
+	current->file_descriptor_table[1] = parent->file_descriptor_table[1];
+	for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+	{
+		struct file *file = parent->file_descriptor_table[i];
+		if (file == NULL)
+			continue;
+		current->file_descriptor_table[i] = file_duplicate(file);
+	}
+	current->fdidx = parent->fdidx;
 
+	// 기다리고 있던 부모 대기
+	sema_up(&current->load_sema);
 	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 error:
-	thread_exit();
+	sema_up(&current->load_sema);
+	exit(TID_ERROR);
+	// thread_exit();
 }
 
 /* Switch the current execution context to the f_name.
@@ -286,13 +361,34 @@ int process_wait(tid_t child_tid UNUSED)
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	for (int i = 0; i < 1000000000; i++)
-		;
-	// while (child_tid)
-	// {
-	// }
+	/*1) get_child_process 함수를 만들어서 사용한다. 인자로 받은 tid를 갖는 자식이 없는 경우에는 -1을 반환하고 종료한다.
 
-	return -1;
+		2) 찾은 자식이 sema_up 해줄때까지 (종료될 때까지) 대기한다.
+
+		3) 자식에게서 종료 signal이 도착하면 자식 리스트에서 해당 자식을 제거한다.
+
+		4) 자식이 완전히 종료되어도 괜찮은지 대기하고 있으므로, sema_up으로 signal을 보내 완전히 종료되게 해주고,
+
+		5) 자식의 exit_status를 반환하고 함수를 종료한다.*/
+
+	// for (int i = 0; i < 1000000000; i++);
+
+	struct thread *child = get_child_process(child_tid);
+	if (child == NULL) // 1) 자식이 아니면 -1 반환
+	{
+		return -1;
+	}
+
+	// 2) 자식이 종료될 때 까지 대기
+	sema_down(&child->wait_sema);
+
+	// 3) 자식이 종료됨을 알리는 wait_sema를 받으면 자식 리스트에서 제거
+	list_remove(&child->child_elem);
+
+	// 4) 자식이 완전히 종료되고 스케줄링이 이어질 수 있도록 자식에게 signal보낸다.
+	sema_up(&child->exit_sema);
+
+	return child->exit_status; // 5) 자식의 exit_status 반환
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -304,8 +400,30 @@ void process_exit(void)
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	/*1) FDT의 모든 파일을 닫고 메모리도 반환한다.
+
+		2) 현재 실행 중인 파일도 닫는다.
+
+		3) 자식이 종료되기를 기다리고 있는 (wait) 부모에게 sema_up으로 signal을 보낸다.
+
+		4) 부모가 wait을 마무리하고 나서 signal을 보내줄 때까지 대기한다.*/
+
+	// 1) FDT의 모든 파일을 닫고 메모리 반환
+	for (int i = 0; i < FDT_COUNT_LIMIT; i++)
+	{
+		close(i);
+	}
+	palloc_free_page(curr->file_descriptor_table);
+
+	// 2) 실행 중인 파일도 닫는다 - 아직 구현 미진행
 
 	process_cleanup();
+
+	// 3) 자식이 종료 될때 까지 대기하고 있는 부모에게 시그널
+	sema_up(&curr->wait_sema);
+
+	// 4) 부모의 시그널을 기다리고 대기가 풀리면 do_schedule 진행
+	sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */

@@ -29,7 +29,8 @@ void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
 int exec(const char *cmd_line);
-
+tid_t fork(const char *thread_name, struct intr_frame *f);
+int wait(int pid);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -80,15 +81,15 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_EXIT:
 		exit(f->R.rdi);
 		break;
-	// case SYS_FORK:
-	// 	f->R.rax =fork(f->R.rdi);
-	// 	break;
+	case SYS_FORK:
+		f->R.rax = fork(f->R.rdi, f);
+		break;
 	case SYS_EXEC:
 		f->R.rax = exec(f->R.rdi);
 		break;
-	// case SYS_WAIT:
-	// 	f->R.rax =wait(f->R.rdi);
-	// 	break;
+	case SYS_WAIT:
+		f->R.rax = wait(f->R.rdi);
+		break;
 	case SYS_CREATE:
 		f->R.rax = create(f->R.rdi, f->R.rsi);
 		// printf("create: %d\n", f->R.rax);
@@ -354,8 +355,20 @@ int exec(const char *cmd_line)
 	}
 	strlcpy(cmd_line_copy, cmd_line, PGSIZE);
 
-	if (process_exec(cmd_line_copy) == -1)
+	if (process_exec(cmd_line_copy) == -1) // process_exec 호출하여 해당 프로세스를 메모리에 load()하고 정보를 스택에 쌓는다
 	{
 		exit(-1);
 	}
+}
+
+/* 부모 프로세스로부터 자식 프로세스를 생성하는 함수 */
+tid_t fork(const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f); // 자식 프로세스의 pid 반환
+}
+
+/* 자식 프로세스 pid를 기다리고 자식의 종료 상태(exit status)를 검색 */
+int wait(int pid)
+{
+	return process_wait(pid);
 }

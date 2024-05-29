@@ -227,6 +227,7 @@ tid_t thread_create(const char *name, int priority,
 	{
 		return TID_ERROR;
 	}
+	list_push_back(&thread_current()->child_list, &t->child_elem); // 현재 스레드의 자식으로 추가
 
 	/* Add to run queue. */
 	thread_unblock(t);
@@ -538,6 +539,10 @@ init_thread(struct thread *t, const char *name, int priority)
 	/* Project2 */
 	t->exit_status = 0;
 	t->fdidx = 2; // 2번 부터
+	list_init(&(t->child_list));
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->wait_sema, 0);
+	sema_init(&t->exit_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
