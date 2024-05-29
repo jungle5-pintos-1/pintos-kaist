@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "lib/string.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -196,6 +197,7 @@ int process_exec(void *f_name)
 	// 현재 컨텍스트 정리
 	process_cleanup(); // 새 프로그램을 로드하기 전에 현재 프로세스의 메모리 할당 등을 해제하여 상태를 초기화
 
+	/* --- argument parsing --- */
 	char *parse[64]; // command line의 길이가 128로 제한 -> 인자와 공백을 합치면 2바이트, 최대 64개의 인자 구분 가능
 	char *save_ptr;
 	int count = 0;
@@ -206,16 +208,17 @@ int process_exec(void *f_name)
 		parse[count++] = token; // parse 배열에 인자를 담는다
 		token = strtok_r(NULL, " ", &save_ptr);
 	}
+	/* --- argument parsing --- */
 
 	/* And then load the binary */
 	// 이진 파일 로드
-	// success = load(file_name, &_if);
+	// printf("---%s---\n", file_name);
 	success = load(file_name, &_if);				// 로드 함수를 호출하여 파일 이름에 해당하는 프로그램을 메모리에 로드
 	argument_stack(parse, count, &_if.rsp); // 스택에 파일 이름도 넣어야 한다
 	_if.R.rdi = count;											// rdi에는 argc인 인자 개수
 	_if.R.rsi = (char *)_if.rsp + 8;				// rsi에는 인자의 시작 주소
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
 
 	/* If load failed, quit. */
 	// 실패하면 메모리 페이지 해제하고 -1 반환, exit() 추가?
@@ -286,7 +289,7 @@ int process_wait(tid_t child_tid UNUSED)
 	// }
 
   /* --- 일정 시간 지난 후 정지 --- */
-  for (int i = 0; i < 100000000000; i++)
+  for (int i = 0; i < 100000000; i++)
   {
   }
 

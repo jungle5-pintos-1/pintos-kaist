@@ -116,7 +116,7 @@ void syscall_handler(struct intr_frame *f UNUSED) {
       break;
   }
 
-  thread_exit();  // 프로세스 종료
+  // thread_exit();  // 프로세스 종료
 }
 
 /* --- project 2 ---- */
@@ -138,6 +138,7 @@ void exit(int status) {
    */
 
   t->exit_status = status;
+  printf ("%s: exit(%d)\n", t->name, t->exit_status);
   thread_exit();
 }
 
@@ -181,6 +182,8 @@ bool create(const char *file, unsigned initial_size) {
       filesys_create(file, initial_size);  // 성공시 true, 실패시 false
   return success;
 }
+
+
 /* 파일 삭제 */
 bool do_remove(const char *file) {
   check_address(file);

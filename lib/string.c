@@ -203,7 +203,7 @@ char *strtok_r(char *s, const char *delimiters, char **save_ptr) {
 
   /* If S is nonnull, start from it.
      If S is null, start from saved position. */
-  if (s == NULL) s = *save_ptr;
+  if (s == NULL) s = *save_ptr; // 첫번째 인자가 null 인 경우, 저장 된 위치에서 시작
   ASSERT(s != NULL);
 
   /* Skip any DELIMITERS at our current position. */
