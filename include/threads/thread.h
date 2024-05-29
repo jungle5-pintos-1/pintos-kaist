@@ -144,6 +144,8 @@ struct thread
 	struct semaphore load_sema;
 	struct semaphore exit_sema;
 	struct semaphore wait_sema;
+
+	struct file *running; // rox
 };
 
 /* If false (default), use round-robin scheduler.

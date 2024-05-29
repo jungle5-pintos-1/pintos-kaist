@@ -413,10 +413,11 @@ void process_exit(void)
 	{
 		close(i);
 	}
-	palloc_free_page(curr->file_descriptor_table);
+	// palloc_free_page(curr->file_descriptor_table); // 한 번에 하나의 메모리 페이지만 해제 -> FDT가 여러 페이지를 사용할 때 적절하게 해제가 안될 수도 있다
+	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES); // 여러 페이지 동시에 해제 -> 모든 관련 페이지를 한 번에 해제 -> 메모리 누수 방지 (mulit-oom)
 
 	// 2) 실행 중인 파일도 닫는다 - 아직 구현 미진행
-
+	file_close(curr->running); // rox
 	process_cleanup();
 
 	// 3) 자식이 종료 될때 까지 대기하고 있는 부모에게 시그널
@@ -669,6 +670,10 @@ load(const char *file_name, struct intr_frame *if_)
 		}
 	}
 
+	/* rox */
+	t->running = file;		 // 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장
+	file_deny_write(file); // 현재 실행중인 파일은 수정할 수 없게 막는다.
+
 	/* Set up stack. */
 	if (!setup_stack(if_)) // 스택 초기화
 		goto done;
@@ -683,7 +688,7 @@ load(const char *file_name, struct intr_frame *if_)
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close(file);
+	// file_close(file);
 	return success;
 }
 
