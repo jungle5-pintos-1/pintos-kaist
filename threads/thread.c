@@ -221,10 +221,16 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	// Project 2
+	t->file_descriptor_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if (t->file_descriptor_table == NULL)
+	{
+		return TID_ERROR;
+	}
+	list_push_back(&thread_current()->child_list, &t->child_elem); // 현재 스레드의 자식으로 추가
+
 	/* Add to run queue. */
 	thread_unblock(t);
-
-	/* modify priority*/
 
 	/* modify priority if not MLFQS */
 	if (!thread_mlfqs)
@@ -529,6 +535,14 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->recent_cpu = RECENT_CPU_DEFAULT;
 	list_push_back(&all_list, &t->all_elem); // 새 리스트를 만들면 초기화
 																					 // main스레드는 thread_start()를 실행하지 않으므로
+
+	/* Project2 */
+	t->exit_status = 0;
+	t->fdidx = 2; // 2번 부터
+	list_init(&(t->child_list));
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->wait_sema, 0);
+	sema_init(&t->exit_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
