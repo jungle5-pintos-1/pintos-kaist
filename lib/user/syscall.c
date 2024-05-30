@@ -6,7 +6,7 @@ __attribute__((always_inline))
 static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 		uint64_t a3_, uint64_t a4_, uint64_t a5_, uint64_t a6_) {
 	int64_t ret;
-	register uint64_t *num asm ("rax") = (uint64_t *) num_;
+	register uint64_t *num asm ("rax") = (uint64_t *) num_; // 시스템 콜 넘버
 	register uint64_t *a1 asm ("rdi") = (uint64_t *) a1_;
 	register uint64_t *a2 asm ("rsi") = (uint64_t *) a2_;
 	register uint64_t *a3 asm ("rdx") = (uint64_t *) a3_;

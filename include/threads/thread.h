@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -32,6 +33,10 @@ typedef int tid_t;
 #define NICE_DEFAULT 0
 #define RECENT_CPU_DEFAULT 0
 #define LOAD_AVG_DEFAULT 0
+
+/* Project 2 */
+#define FDT_PAGES 2
+#define FDT_COUNT_LIMIT 128
 
 /* A kernel thread or user process.
  *
@@ -126,6 +131,21 @@ struct thread
 	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
 	unsigned magic;				/* Detects stack overflow. */
+
+	/* Project2 : User programs - system call - */
+	int exit_status;										 // exit(), wait() 구현 때 사용
+	struct file **file_descriptor_table; // FDT
+	int fdidx;													 // fd index
+
+	struct intr_frame parent_if; // 부모 프로세스의 유저 스택 정보를 담아야 한다.
+	struct list child_list;			 // 자식 프로세스 리스트
+	struct list_elem child_elem; // 자식 리스트 요소
+
+	struct semaphore load_sema;
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
+
+	struct file *running; // rox
 };
 
 /* If false (default), use round-robin scheduler.
