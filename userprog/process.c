@@ -414,7 +414,7 @@ void process_exit(void)
 		close(i);
 	}
 	// palloc_free_page(curr->file_descriptor_table); // 한 번에 하나의 메모리 페이지만 해제 -> FDT가 여러 페이지를 사용할 때 적절하게 해제가 안될 수도 있다
-	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES); // 여러 페이지 동시에 해제 -> 모든 관련 페이지를 한 번에 해제 -> 메모리 누수 방지 (mulit-oom)
+	palloc_free_multiple(curr->file_descriptor_table, FDT_PAGES); // 여러 페이지 동시에 해제 -> 모든 관련 페이지를 한 번에 해제 -> 메모리 누수 방지 (mulit-oom), get이 multiple로 받아서 그런듯
 
 	// 2) 실행 중인 파일도 닫는다 - 아직 구현 미진행
 	file_close(curr->running); // rox
