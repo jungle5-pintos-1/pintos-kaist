@@ -12,6 +12,7 @@
 #include "userprog/gdt.h"
 #include "user/syscall.h"
 #include "threads/synch.h"
+#include "threads/palloc.h"
 
 
 /* --- project 2 --- */
