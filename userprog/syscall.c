@@ -121,6 +121,12 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_CLOSE:
 		close(f->R.rdi);
 		break;
+	case SYS_MMAP:
+		// f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		// munmap(f->R.rdi);
+		break;
 	default:
 		printf("Wrong syscall_n : %d\n", syscall_n);
 		thread_exit();
@@ -141,10 +147,10 @@ void check_address(void *addr)
 	{
 		exit(-1); // 유저 영역이 아니면 종료
 	}
-	if (pml4_get_page(t->pml4, addr) == NULL)
-	{
-		exit(-1);
-	}
+	// if (pml4_get_page(t->pml4, addr) == NULL) // project 3에서는 spt 이용
+	// {
+	// 	exit(-1);
+	// }
 }
 
 /* 호출시 pintos 종료 */
@@ -262,12 +268,14 @@ int read(int fd, void *buffer, unsigned size)
 		}
 		else
 		{
+			// project 3
 			struct page *page = spt_find_page(&thread_current()->spt, buffer);
-			if (page && !page->writable)
+			if (page && !page->writable) // page가 존재하면서 읽기 전용이면 종료
 			{
 				lock_release(&filesys_lock);
 				exit(-1);
 			}
+			// ~project 3
 
 			read_bytes = file_read(file_obj, buffer, size); // 파일의 데이터 크기만큼 저장
 		}

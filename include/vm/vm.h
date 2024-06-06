@@ -124,6 +124,8 @@ void vm_dealloc_page(struct page *page);
 bool vm_claim_page(void *va);
 enum vm_type page_get_type(struct page *page);
 
+void hash_page_destroy(struct hash_elem *e, void *aux);
+
 /* 모든 페이지는 메모리가 구성될 때 메모리에 대한 메타 데이터를 보유하고 있지 않다.
 	 따라서 물리 메모리 내 각 프레임 정보를 갖는 frame_table 이용 */
 struct list frame_table; // frame entry의 리스트 형태
