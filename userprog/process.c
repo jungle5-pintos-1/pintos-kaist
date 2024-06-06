@@ -243,7 +243,7 @@ __do_fork(void *aux)
 	}
 	current->fdidx = parent->fdidx;
 
-	// 기다리고 있던 부모 대기
+	// 기다리고 있던 부모 대기 해제
 	sema_up(&current->load_sema);
 	process_init();
 
@@ -290,7 +290,9 @@ int process_exec(void *f_name)
 	/* And then load the binary */
 	// 이진 파일 로드
 	// success = load(file_name, &_if);
-	success = load(file_name, &_if);				// 로드 함수를 호출하여 파일 이름에 해당하는 프로그램을 메모리에 로드
+	lock_acquire(&filesys_lock);
+	success = load(file_name, &_if); // 로드 함수를 호출하여 파일 이름에 해당하는 프로그램을 메모리에 로드
+	lock_release(&filesys_lock);
 	argument_stack(parse, count, &_if.rsp); // 스택에 파일 이름도 넣어야 한다
 	_if.R.rdi = count;											// rdi에는 argc인 인자 개수
 	_if.R.rsi = (char *)_if.rsp + 8;				// rsi에는 인자의 시작 주소
@@ -847,12 +849,33 @@ install_page(void *upage, void *kpage, bool writable)
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+// 실행 파일의 내용을 페이지로 로드하는 함수
+// 첫 번째 page fault가 발생할 때 호출된다.
 static bool
 lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct container *lazy_load_arg = (struct container *)aux; // 인자로 받아온 lazy_load_arg 컨테이너
+	struct file *file = lazy_load_arg->file;
+	off_t ofs = lazy_load_arg->ofs;
+	size_t page_read_bytes = lazy_load_arg->page_read_bytes;
+	size_t page_zero_bytes = lazy_load_arg->page_zero_bytes;
+
+	// 1) 파일의 position을 ofs으로 지정
+	file_seek(file, ofs);
+
+	// 2) 파일을 read_bytes만큼 물리 프레임에 읽어 들인다.(로딩)
+	if (file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes) // 물리 프레임에서 읽은 바이트 수가 요청된 바이트 수와 동일한지 확인
+	{
+		palloc_free_page(page->frame->kva);
+		return false;
+	}
+
+	// 3) 다 읽은 지점부터 zero_bytes만큼 0으로 채운다.
+	memset(page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -869,12 +892,17 @@ lazy_load_segment(struct page *page, void *aux)
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+// 파일의 내용을 upage에 로드하는 함수
+// 프로세스가 실행될 때 실행 파일을 현재 스레드로 로드하는 함수인 load 함수에서 호출된다.
 static bool
 load_segment(struct file *file, off_t ofs, uint8_t *upage,
 						 uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
+	// read_bytes + zero_bytes 가 페이지 크기의 배수인지 확인
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
+	// upage가 정렬되어 있는지 확인
 	ASSERT(pg_ofs(upage) == 0);
+	// offset이 페이지 정렬되어 있는지 확인
 	ASSERT(ofs % PGSIZE == 0);
 
 	while (read_bytes > 0 || zero_bytes > 0)
@@ -886,30 +914,56 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		// void *aux = NULL;
+		struct container *lazy_load_arg = (struct container *)malloc(sizeof(struct container));
+		lazy_load_arg->file = file;												// 내용이 담긴 파일 객체
+		lazy_load_arg->ofs = ofs;													// 이 페이지에서 읽기 시작한 위치
+		lazy_load_arg->page_read_bytes = page_read_bytes; // 이 페이지에서 읽어야 하는 바이트 수
+		lazy_load_arg->page_zero_bytes = page_zero_bytes; // 이 페이지에서 read_bytes만큼 읽고 공간이 남아 0으로 채워야 하는 바이트 수
+
+		// 페이지 폴트가 발생했을 때 데이터를 로드하기 위한 준비(각 페이지에 필요한 메타 데이터 등을 설정)
+		// 후에 페이지 폴트가 발생했을 때 로드된다.
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-																				writable, lazy_load_segment, aux))
+																				writable, lazy_load_segment, lazy_load_arg))
 			return false;
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
+// load에서 호출된다.
+
 static bool
 setup_stack(struct intr_frame *if_)
 {
 	bool success = false;
+	// 스택은 아래로 성장하므로, 스택의 시작점인 USER_STACK에서 PGSIZE만큼 아래로 내린 지점에서 페이지 생성
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
 
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
+
+	// 1) stack_bottom에 페이지 하나 할당받는다.
+	// VM_MARKER_0 : 스택이 저장된 메모리 페이짐을 식별하기 위해 추가
+	// writable : argument_stack()에서 값을 넣어야 하니 True
+	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
+	{
+		// 2) 할당 받은 페이지에 물리 프레임 매핑
+		success = vm_claim_page(stack_bottom);
+		if (success)
+		{
+			// 3) 성공하면 rsp를 변경(argument_stack에서 이 위치부터 인자를 push한다.)
+			if_->rsp = USER_STACK;
+		}
+	}
 
 	return success;
 }

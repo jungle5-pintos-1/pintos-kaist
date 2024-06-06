@@ -262,6 +262,13 @@ int read(int fd, void *buffer, unsigned size)
 		}
 		else
 		{
+			struct page *page = spt_find_page(&thread_current()->spt, buffer);
+			if (page && !page->writable)
+			{
+				lock_release(&filesys_lock);
+				exit(-1);
+			}
+
 			read_bytes = file_read(file_obj, buffer, size); // 파일의 데이터 크기만큼 저장
 		}
 	}
@@ -346,18 +353,21 @@ int exec(const char *cmd_line)
 
 	// process_exec 함수 안에서 filename을 변경해야 하므로
 	// 커널 메모리 공간에 cmd_line의 복사본을 만든다.
+	// cmd_line은 const char* 타입이어서 수정할 수 없다.
 	// caller 함수와 load() 사이 race condition 방지
 	char *cmd_line_copy;
 	cmd_line_copy = palloc_get_page(0);
 	if (cmd_line_copy == NULL)
 	{
-		exit(-1);
+		// exit(-1);
+		return -1;
 	}
 	strlcpy(cmd_line_copy, cmd_line, PGSIZE);
 
 	if (process_exec(cmd_line_copy) == -1) // process_exec 호출하여 해당 프로세스를 메모리에 load()하고 정보를 스택에 쌓는다
 	{
-		exit(-1);
+		// exit(-1);
+		return -1;
 	}
 }
 
