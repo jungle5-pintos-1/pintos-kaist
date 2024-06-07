@@ -191,6 +191,10 @@ vm_get_frame(void)
 static void
 vm_stack_growth(void *addr UNUSED)
 {
+	// 스택 크기를 증가시키기 위해 anon page를 하나 이상 할당 하여
+	// 주어진 주소가 예외 주소가 되지 않게 한다
+	// 할당할 때 addr을 PGSIZE로 내림하여 처리
+	vm_alloc_page(VM_ANON | VM_MARKER_0, pg_round_down(addr), 1);
 }
 
 /* Handle the fault on write_protected page */
@@ -222,6 +226,22 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	if (not_present) // 접근한 메모리의 frame이 존재하지 않은 경우
 	{
+		void *rsp = f->rsp; // 유저 영역에서 접근이면 스택 포인터 가져오고
+		if (!user)
+		{
+			rsp = thread_current()->rsp; // 커널 영역에서 접근이면 미리 저장해둔 유저 스택 포인터 가져온다
+		}
+
+		// 공통 : USER_STACK은 최대 1MB, USER_STACK ~ USER_STACK - (1<<20)
+		// 			  USER_STACK >= addr >= rsp >= USER_STACK-(1<<20)
+		// 1. (PUSH) rsp 보다 낮은 곳을 addr이 가리키면 addr이 예외주소가 되지 않도록 유저 스택을 키워준다
+		// 2. rsp가 있는 곳까지 스택이 커져야 하는데 그 사이에 fault가 발생하면 스택을 키워서 회피
+		if ((USER_STACK - (1 << 20) <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK) ||
+				(USER_STACK - (1 << 20) <= rsp && rsp <= addr && addr <= USER_STACK))
+		{
+			vm_stack_growth(addr);
+		}
+
 		page = spt_find_page(spt, addr); // 해당 주소에 해당하는 페이지 있는지 확인
 		if (page == NULL)
 		{

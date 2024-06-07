@@ -64,15 +64,18 @@ void syscall_handler(struct intr_frame *f UNUSED)
 {
 	// 일단 유저 스택에 저장되어 있는 시스템 콜 넘버를 가져온다
 	int syscall_n = f->R.rax; // rax : 시스템 콜 넘버
-	/**
-	 * 인자 들어오는 순서:
-	 * 1번째 인자 : %rdi
-	 * 2번째 인자 : %rsi
-	 * 3번째 인자 : %rdx
-	 * 4번째 인자 : %r10
-	 * 5번째 인자 : %r8
-	 * 6번째 인자 : %r9
-	 */
+/**
+ * 인자 들어오는 순서:
+ * 1번째 인자 : %rdi
+ * 2번째 인자 : %rsi
+ * 3번째 인자 : %rdx
+ * 4번째 인자 : %r10
+ * 5번째 인자 : %r8
+ * 6번째 인자 : %r9
+ */
+#ifdef VM
+	thread_current()->rsp = f->rsp;
+#endif
 	switch (syscall_n)
 	{
 	case SYS_HALT:

@@ -952,7 +952,7 @@ setup_stack(struct intr_frame *if_)
 	/* TODO: Your code goes here */
 
 	// 1) stack_bottom에 페이지 하나 할당받는다.
-	// VM_MARKER_0 : 스택이 저장된 메모리 페이짐을 식별하기 위해 추가
+	// VM_MARKER_0 : 스택이 저장된 메모리 페이징을 식별하기 위해 추가
 	// writable : argument_stack()에서 값을 넣어야 하니 True
 	if (vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1))
 	{
