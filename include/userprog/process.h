@@ -26,4 +26,6 @@ struct container
   size_t page_zero_bytes; // 이 페이지에서 read_bytes만큼 읽고 공간이 남아 0으로 채워야 하는 바이트 수
 };
 
+bool lazy_load_segment(struct page *page, void *aux);
+
 #endif /* userprog/process.h */

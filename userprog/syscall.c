@@ -31,6 +31,8 @@ void close(int fd);
 int exec(const char *cmd_line);
 tid_t fork(const char *thread_name, struct intr_frame *f);
 int wait(int pid);
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -125,10 +127,10 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		close(f->R.rdi);
 		break;
 	case SYS_MMAP:
-		// f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
 		break;
 	case SYS_MUNMAP:
-		// munmap(f->R.rdi);
+		munmap(f->R.rdi);
 		break;
 	default:
 		printf("Wrong syscall_n : %d\n", syscall_n);
@@ -392,4 +394,56 @@ tid_t fork(const char *thread_name, struct intr_frame *f)
 int wait(int pid)
 {
 	return process_wait(pid);
+}
+
+// 파일과 메모리 매핑
+// addr : 매핑 시작할 가상주소, length : 파일에서 매핑할 길이
+// writable : 쓰기 가능한지, fd : 매핑할 파일 디스크립터, offset : 매핑을 시작할 바이트 위치
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+	// 1. addr이 없는 경우
+	if (!addr)
+	{
+		return NULL;
+	}
+	// 2. addr or offset이 page-aligned 안된 경우
+	if (pg_round_down(addr) != addr || pg_round_down(offset) != offset)
+	{
+		return NULL;
+	}
+	// 3. addr or addr+length가 유저 영역이 아닌 경우
+	if (!is_user_vaddr(addr) || !is_user_vaddr(addr + length))
+	{
+		return NULL;
+	}
+	// 4. length가 0인 경우
+	if (!length)
+	{
+		return NULL;
+	}
+	// 5. 콘솔 입출력일 경우
+	if (fd == 0 || fd == 1)
+	{
+		return NULL;
+	}
+	// 6. fd로 열린 파일의 길이가 0 바이트인 경우
+	struct file *file_obj = process_get_file(fd);
+	if (file_obj == NULL || !file_length(file_obj))
+	{
+		return NULL;
+	}
+	// 7. 할당된 페이지가 겹칠 경우
+	if (spt_find_page(&thread_current()->spt, addr))
+	{
+		return NULL;
+	}
+
+	// 파일이 매핑된 가상주소 반환
+	return do_mmap(addr, length, writable, fd, offset);
+}
+
+// 파일에 매핑된 메모리 해제
+void munmap(void *addr)
+{
+	do_munmap(addr);
 }

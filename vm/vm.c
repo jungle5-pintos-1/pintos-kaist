@@ -8,6 +8,8 @@
 #include "threads/mmu.h"
 #include "vm/uninit.h"
 #include "lib/string.h"
+#include "userprog/process.h"
+#include "threads/thread.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -104,7 +106,7 @@ spt_find_page(struct supplemental_page_table *spt UNUSED, void *va UNUSED)
 {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-	page = malloc(sizeof(struct page));
+	page = (struct page *)malloc(sizeof(struct page));
 	struct hash_elem *e;
 
 	// 해당 va가 속해있는 페이지 시작 주소를 갖는 페이지를 만든다.
@@ -361,8 +363,26 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 			vm_alloc_page_with_initializer(VM_ANON, upage, writable, init, aux);
 			continue;
 		}
+		// 2) type이 file이면
+		if (type == VM_FILE)
+		{
+			struct container *file_aux = malloc(sizeof(struct container));
+			file_aux->file = src_page->file.file;
+			file_aux->ofs = src_page->file.ofs;
+			file_aux->page_read_bytes = src_page->file.page_read_bytes;
+			file_aux->page_zero_bytes = src_page->file.page_zero_bytes;
+			if (!vm_alloc_page_with_initializer(type, upage, writable, NULL, file_aux))
+			{
+				return false;
+			}
+			struct page *file_page = spt_find_page(dst, upage);
+			file_backed_initializer(file_page, type, NULL);
+			file_page->frame = src_page->frame;
+			pml4_set_page(thread_current()->pml4, file_page->va, src_page->frame->kva, src_page->writable);
+			continue;
+		}
 
-		// 2) uninit이 아닐 경우(uninit이 아니면 anon으로 초기화 했으니까 type은 anon)
+		// 3) uninit이 아닐 경우(uninit이 아니면 anon으로 초기화 했으니까 type은 anon)
 		// init이랑 aux는 Lazy Loading에 필요. 지금 만드는 페이지는 기다리지 않고 바로 내용을 넣어줄 것이므로 필요 없음
 		if (!vm_alloc_page(type, upage, writable))
 		{
@@ -403,6 +423,5 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED)
 void hash_page_destroy(struct hash_elem *e, void *aux)
 {
 	struct page *page = hash_entry(e, struct page, hash_elem);
-	destroy(page);
-	free(page);
+	vm_dealloc_page(page);
 }

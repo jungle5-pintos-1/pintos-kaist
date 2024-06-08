@@ -851,8 +851,7 @@ install_page(void *upage, void *kpage, bool writable)
 
 // 실행 파일의 내용을 페이지로 로드하는 함수
 // 첫 번째 page fault가 발생할 때 호출된다.
-static bool
-lazy_load_segment(struct page *page, void *aux)
+bool lazy_load_segment(struct page *page, void *aux)
 {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
