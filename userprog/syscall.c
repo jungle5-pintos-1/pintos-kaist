@@ -421,6 +421,11 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 	{
 		return NULL;
 	}
+
+	// if (length > filesize(fd))
+	// {
+	// 	length = filesize(fd);
+	// }
 	// 5. 콘솔 입출력일 경우
 	if (fd == 0 || fd == 1)
 	{

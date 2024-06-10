@@ -97,6 +97,7 @@ do_mmap(void *addr, size_t length, int writable,
 	// 주어진 파일 길이와 length를 비교해서 length보다 크기가 작으면 파일을 통으로 읽고
 	// 파일 길이가 더 크면 주어진 length만큼만 읽는다.
 	size_t read_bytes = length > file_length(mfile) ? file_length(mfile) : length;
+	// size_t read_bytes = length;
 	// 마지막 페이지에 들어갈 자투리 0
 	size_t zero_bytes = PGSIZE - read_bytes % PGSIZE;
 
