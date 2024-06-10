@@ -73,9 +73,14 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	 * 5번째 인자 : %r8
 	 * 6번째 인자 : %r9
 	 */
-	switch (syscall_n)
-	{
-	case SYS_HALT:
+
+#ifdef VM
+	// System Call이 발생하면서 Kernel Mode로 전환되니까 User Stack의 rsp 저장해두기
+	thread_current()->rsp = f->rsp;
+	
+#endif
+	switch (syscall_n) {
+		case SYS_HALT:
 		halt();
 		break;
 	case SYS_EXIT:
@@ -92,25 +97,21 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_CREATE:
 		f->R.rax = create(f->R.rdi, f->R.rsi);
-		// printf("create: %d\n", f->R.rax);
 		break;
 	case SYS_REMOVE:
 		f->R.rax = remove(f->R.rdi);
 		break;
 	case SYS_OPEN:
 		f->R.rax = open(f->R.rdi);
-		// printf("open: %d\n", f->R.rax);
 		break;
 	case SYS_FILESIZE:
 		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ:
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
-		// printf("read: %d\n", f->R.rax);
 		break;
 	case SYS_WRITE:
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
-		// printf("write: %d\n", f->R.rax);
 		break;
 	case SYS_SEEK:
 		seek(f->R.rdi, f->R.rsi);
@@ -120,10 +121,10 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
-		break;
-	default:
-		printf("Wrong syscall_n : %d\n", syscall_n);
-		thread_exit();
+		//break;
+
+	// default:
+	// 	thread_exit();
 	}
 	// printf("system call!\n");
 	// thread_exit();
@@ -141,10 +142,10 @@ void check_address(void *addr)
 	{
 		exit(-1); // 유저 영역이 아니면 종료
 	}
-	if (pml4_get_page(t->pml4, addr) == NULL)
-	{
-		exit(-1);
-	}
+	// if (pml4_get_page(t->pml4, addr) == NULL)
+	// {
+	// 	exit(-1);
+	// }
 }
 
 /* 호출시 pintos 종료 */
