@@ -209,9 +209,9 @@ vm_get_frame(void)
 	frame->kva = kva; // user pool에서 커널 가상 주소 공간으로 1page 할당
 	frame->page = NULL;
 
-	// lock_acquire(&frame_table_lock);
+	lock_acquire(&frame_table_lock);
 	list_push_back(&frame_table, &frame->frame_elem);
-	// lock_release(&frame_table_lock);
+	lock_release(&frame_table_lock);
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);
 	return frame;

@@ -290,9 +290,9 @@ int process_exec(void *f_name)
 	/* And then load the binary */
 	// 이진 파일 로드
 	// success = load(file_name, &_if);
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	success = load(file_name, &_if); // 로드 함수를 호출하여 파일 이름에 해당하는 프로그램을 메모리에 로드
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	argument_stack(parse, count, &_if.rsp); // 스택에 파일 이름도 넣어야 한다
 	_if.R.rdi = count;											// rdi에는 argc인 인자 개수
 	_if.R.rsi = (char *)_if.rsp + 8;				// rsi에는 인자의 시작 주소
