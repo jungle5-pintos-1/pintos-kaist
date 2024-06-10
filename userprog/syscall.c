@@ -177,15 +177,12 @@ void exit(int status)
 bool create(const char *file, unsigned initial_size)
 {
 	check_address(file);
-	// printf("Attempting to create file with name '%s' and size %u\n", file, initial_size);
 	if (filesys_create(file, initial_size))
 	{
-		// printf("filesys_create returned %d\n", filesys_create(file, initial_size));
 		return true;
 	}
 	else
 	{
-		// printf("filesys_create returned %d\n", filesys_create(file, initial_size));
 		return false;
 	}
 }
@@ -416,16 +413,12 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 	{
 		return NULL;
 	}
-	// 4. length가 0인 경우
-	if (!length)
+	// 4. length가 0보다 작은 경우
+	if ((int)length <= 0)
 	{
 		return NULL;
 	}
 
-	// if (length > filesize(fd))
-	// {
-	// 	length = filesize(fd);
-	// }
 	// 5. 콘솔 입출력일 경우
 	if (fd == 0 || fd == 1)
 	{
@@ -444,7 +437,7 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 	}
 
 	// 파일이 매핑된 가상주소 반환
-	return do_mmap(addr, length, writable, fd, offset);
+	return do_mmap(addr, length, writable, file_obj, offset);
 }
 
 // 파일에 매핑된 메모리 해제
