@@ -140,8 +140,30 @@ vm_get_victim(void)
 {
 	struct frame *victim = NULL;
 	/* TODO: The policy for eviction is up to you. */
+	struct thread *curr = thread_current();
 
-	return victim;
+	// lock_acquire(&frame_table_lock);
+	struct list_elem *clock_hand = list_begin(&frame_table);
+
+	for (clock_hand; clock_hand != list_end(&frame_table); clock_hand = list_next(clock_hand))
+	{
+		victim = list_entry(clock_hand, struct frame, frame_elem);
+		if (victim->page == NULL) // 페이지가 할당되지 않은 경우
+		{
+			// lock_release(&frame_table_lock);
+			return victim;
+		}
+		if (!pml4_is_accessed(curr->pml4, victim->page->va)) // 페이지가 최근에 접근되지 않았다면
+		{
+			// lock_release(&frame_table_lock);
+			return victim; // 이 프레임을 교체 대상으로 선택
+		}
+		// 페이지가 접근되었다면 액세스 플래그를 리셋
+		pml4_set_accessed(curr->pml4, victim->page->va, false);
+	}
+
+	// lock_release(&frame_table_lock);
+	return victim; // 모든 프레임을 검토했지만 교체할 프레임을 찾지 못한경우 마지막 victim 반환
 }
 
 /* Evict one page and return the corresponding frame.
@@ -151,8 +173,12 @@ vm_evict_frame(void)
 {
 	struct frame *victim UNUSED = vm_get_victim();
 	/* TODO: swap out the victim and return the evicted frame. */
+	if (victim->page)
+	{
+		swap_out(victim->page);
+	}
 
-	return NULL;
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -170,19 +196,21 @@ static struct frame *
 vm_get_frame(void)
 {
 	struct frame *frame = NULL;
-	frame = malloc(sizeof(struct frame));
 	/* TODO: Fill this function. */
 
 	void *kva = palloc_get_page(PAL_USER);
-	if (kva == NULL)
+	if (kva == NULL) // user 풀 공간이 하나도 없다면
 	{
-		PANIC("todo");
+		struct frame *victim = vm_evict_frame(); // frame에서 공간 내리고 새로 할당 받아온다
+		victim->page = NULL;
+		return victim;
 	}
+	frame = (struct frame *)malloc(sizeof(struct frame));
 	frame->kva = kva; // user pool에서 커널 가상 주소 공간으로 1page 할당
 	frame->page = NULL;
 
 	// lock_acquire(&frame_table_lock);
-	// list_push_back(&frame_table, &frame->frame_elem);
+	list_push_back(&frame_table, &frame->frame_elem);
 	// lock_release(&frame_table_lock);
 	ASSERT(frame != NULL);
 	ASSERT(frame->page == NULL);

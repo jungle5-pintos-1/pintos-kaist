@@ -79,13 +79,13 @@ int main(void)
 
 	/* Initialize ourselves as a thread so we can use locks,
 		 then enable console locking. */
-	thread_init(); // 스레드로 자신을 초기화하여 잠금을 사용할 수 있게 한다
-	console_init(); // 콘솔 잠금을 활성화 
+	thread_init();	// 스레드로 자신을 초기화하여 잠금을 사용할 수 있게 한다
+	console_init(); // 콘솔 잠금을 활성화
 
 	/* Initialize memory system. */
 	mem_end = palloc_init(); // 페이지 할당 초기화
-	malloc_init(); // 동적 메모리 할당 초기화
-	paging_init(mem_end); // 페이징 시스템 초기화
+	malloc_init();					 // 동적 메모리 할당 초기화
+	paging_init(mem_end);		 // 페이징 시스템 초기화
 
 #ifdef USERPROG
 	tss_init();
@@ -93,9 +93,9 @@ int main(void)
 #endif
 
 	/* Initialize interrupt handlers. */
-	intr_init(); // 인터럽트 핸들러 초기화
+	intr_init();	// 인터럽트 핸들러 초기화
 	timer_init(); // 타이머를 초기화
-	kbd_init(); // 키보드 초기화
+	kbd_init();		// 키보드 초기화
 	input_init(); // 입력 장치 초기화
 #ifdef USERPROG
 	exception_init();

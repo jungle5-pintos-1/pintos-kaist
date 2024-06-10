@@ -177,12 +177,15 @@ void exit(int status)
 bool create(const char *file, unsigned initial_size)
 {
 	check_address(file);
+	// lock_acquire(&filesys_lock);
 	if (filesys_create(file, initial_size))
 	{
+		// lock_release(&filesys_lock);
 		return true;
 	}
 	else
 	{
+		// lock_release(&filesys_lock);
 		return false;
 	}
 }
@@ -207,13 +210,13 @@ bool remove(const char *file)
 int open(const char *file)
 {
 	check_address(file); // 유효한 지 확인
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	struct file *file_obj = filesys_open(file); // 열려고 하는 파일 객체정보 받기
 	// printf("%d\n", 1);
 	if (file_obj == NULL) // 생성 됐는지 확인
 	{
 		// printf("%d\n", 2);
-		lock_release(&filesys_lock);
+		// lock_release(&filesys_lock);
 		return -1;
 	}
 	int fd = process_add_file(file_obj); // 만들어진 파일을 fdt 테이블에 추가
@@ -223,7 +226,7 @@ int open(const char *file)
 		// printf("%d\n", 2);
 		file_close(file_obj); // 파일을 닫는다
 	}
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	// printf("%d\n", 3);
 	return fd;
 }
@@ -248,7 +251,6 @@ int read(int fd, void *buffer, unsigned size)
 	unsigned char *buf = buffer;
 	int read_bytes = 0;
 
-	lock_acquire(&filesys_lock);
 	if (fd == STDIN_FILENO) // STDIN
 	{
 		for (int i = 0; i < size; i++)
@@ -274,15 +276,16 @@ int read(int fd, void *buffer, unsigned size)
 			struct page *page = spt_find_page(&thread_current()->spt, buffer);
 			if (page && !page->writable) // page가 존재하면서 읽기 전용이면 종료
 			{
-				lock_release(&filesys_lock);
+				// lock_release(&filesys_lock);
 				exit(-1);
 			}
 			// ~project 3
 
+			lock_acquire(&filesys_lock);
 			read_bytes = file_read(file_obj, buffer, size); // 파일의 데이터 크기만큼 저장
+			lock_release(&filesys_lock);
 		}
 	}
-	lock_release(&filesys_lock);
 	return read_bytes; // 읽은 바이트 수 리턴
 }
 
@@ -292,7 +295,6 @@ int write(int fd, void *buffer, unsigned size)
 	check_address(buffer);
 	int write_bytes = 0;
 
-	lock_acquire(&filesys_lock);
 	if (fd == STDOUT_FILENO)
 	{
 		putbuf(buffer, size);
@@ -311,10 +313,11 @@ int write(int fd, void *buffer, unsigned size)
 		}
 		else
 		{
+			lock_acquire(&filesys_lock);
 			write_bytes = file_write(file_obj, buffer, size);
+			lock_release(&filesys_lock);
 		}
 	}
-	lock_release(&filesys_lock);
 	return write_bytes;
 }
 
