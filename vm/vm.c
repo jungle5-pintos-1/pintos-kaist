@@ -3,6 +3,13 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "lib/kernel/hash.h"
+#include "threads/vaddr.h"
+#include "threads/mmu.h"
+#include "vm/uninit.h"
+#include "lib/string.h"
+#include "userprog/process.h"
+#include "threads/thread.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -301,7 +308,28 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			continue;
 		}
 
-		/* (2) 부모 프로세스가 가진 PAGE의 type이 VM_UNINIT이 아닐 때 */
+		/* (2) */
+		if (type == VM_FILE) {
+			struct lazy_load_arg *file_aux = malloc(sizeof(struct lazy_load_arg));
+			
+			file_aux->file = src_page->file.file;
+			file_aux->ofs = src_page->file.ofs;
+			file_aux->read_bytes = src_page->file.read_bytes;
+			file_aux->zero_bytes = src_page->file.zero_bytes;
+
+			if (!vm_alloc_page_with_initializer(type, upage, writable, NULL, file_aux)) {
+				return false;
+			}
+
+			struct page *file_page = spt_find_page(dst, upage);
+
+			file_backed_initializer(file_page, type, NULL);
+			file_page->frame = src_page->frame;
+			pml4_set_page(thread_current()->pml4, file_page->va, src_page->frame->kva, src_page->writable);
+			continue;
+		}
+
+		/* (3) 부모 프로세스가 가진 PAGE의 type이 VM_UNINIT이 아닐 때 */
 		else {
 			// 현재 만드는 PAGE는 기다리지 않고 바로 내용을 넣어줄 것이므로 init, aux을 NULL로 정해주기
 			if (!vm_alloc_page(type, upage, writable)) {

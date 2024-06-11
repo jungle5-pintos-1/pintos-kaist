@@ -5,18 +5,22 @@
 #include "threads/thread.h"
 #include "threads/loader.h"
 #include "userprog/gdt.h"
+#include "userprog/process.h"
 #include "threads/flags.h"
-#include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-#include "include/lib/stdio.h"
-#include "include/lib/string.h"
-#include "userprog/process.h"
+#include "intrinsic.h"
+#include "threads/synch.h"
+#include "devices/input.h"
+#include "lib/kernel/stdio.h"
 #include "threads/palloc.h"
+#include "vm/vm.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
+
 void check_address(void *addr);
+
 void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
@@ -31,6 +35,10 @@ void close(int fd);
 int exec(const char *cmd_line);
 tid_t fork(const char *thread_name, struct intr_frame *f);
 int wait(int pid);
+
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -121,13 +129,14 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
-		//break;
-
-	// default:
-	// 	thread_exit();
+		break;
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
 	}
-	// printf("system call!\n");
-	// thread_exit();
 }
 
 // User memory access
@@ -235,11 +244,24 @@ int filesize(int fd)
 /* 해당 파일로 부터 값을 읽어 버퍼에 넣는 함수 */
 int read(int fd, void *buffer, unsigned size)
 {
-	// 유효한 주소인지 체크
-	check_address(buffer);
-	check_address(buffer + size - 1); // 버퍼 끝 주소도 유저 영역 내에 있는 지 확인
+	// // 유효한 주소인지 체크
+	// check_address(buffer);
+	// check_address(buffer + size - 1); // 버퍼 끝 주소도 유저 영역 내에 있는 지 확인
 	unsigned char *buf = buffer;
 	int read_bytes = 0;
+	
+	/* ---------------------- */
+	struct page *page = spt_find_page(&thread_current()->spt, buffer);
+	if (page){
+		if (!page->writable) {
+			exit(-1);
+		}
+	}
+
+	if (!is_user_vaddr(buffer) || buffer == NULL){
+		exit(-1);
+	}
+	/* ---------------------- */
 
 	lock_acquire(&filesys_lock);
 	if (fd == STDIN_FILENO) // STDIN
@@ -372,4 +394,47 @@ tid_t fork(const char *thread_name, struct intr_frame *f)
 int wait(int pid)
 {
 	return process_wait(pid);
+}
+
+/* 파일에 가상 PAGE mapping을 해줘도 적합한지 체크 */
+// addr: mapping할 가상 주소, length: mapping할 파일 길이, writable: 쓰기 가능 여부, fd: 파일 디스크립터, offset: 파일에서 mapping을 시작할 위치
+// 파일 디스크립터 FD로 연 file을 offset byte 위치에서부터 시작해 length byte 크기만큼 addr에 위치한 프로세스의 가상 주소에 mapping한다.
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset) {
+	/* addr 검증 / addr가 page-align 되지 않았을 때 */
+	if (!addr || addr != pg_round_down(addr)) {
+		 return NULL;
+	}
+
+	/* offset이 page-align 되지 않았을 때 */
+	if (offset != pg_round_down(offset)) {
+		return NULL;
+	}
+
+	/* addr(시작)와 addr + legnth(마지막)이 user 영역에 없었을 때 */
+	if (!is_user_vaddr(addr) || !is_user_vaddr(addr + length)) {
+		return NULL;
+	}
+
+	/* 해당 addr가 이미 SPT에 할당 되었을 때 */
+	if (spt_find_page(&thread_current()->spt, addr)) {
+		return NULL;
+	}
+
+	struct file *f = process_get_file(fd);
+
+	/* FD에 해당하는 file 객체가 없었을 때 */
+	if (f == NULL) {
+		return NULL;
+	}
+
+	/* 파일 길이가 0이거나 mapping으로 주어진 길이가 0 이하일 때 */
+	if (file_length(f) == 0 || (int)length <= 0) {
+		return NULL;
+	}
+
+	return do_mmap(addr, length, writable, f, offset);
+}
+
+void munmap(void *addr) {
+	do_munmap(addr);
 }

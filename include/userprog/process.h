@@ -18,4 +18,14 @@ void process_close_file(int fd);
 
 struct thread *get_child_process(int pid);
 
+bool lazy_load_segment(struct page *page, void *aux);
+
+/* FRAME에 내용을 load할 때 필요한 정보 */
+struct lazy_load_arg {
+    struct file *file;      // 내용이 담긴 file 객체
+    off_t ofs;              // PAGE에서 읽기 시작할 위치
+    uint32_t read_bytes;    // PAGE에서 읽어야 하는 byte 수
+    uint32_t zero_bytes;    // PAGE에서 read_bytes만큼 읽고 공간이 남아 0으로 채워야 하는 byte 수
+};
+
 #endif /* userprog/process.h */
