@@ -46,9 +46,9 @@ bool anon_initializer(struct page *page, enum vm_type type, void *kva)
 static bool
 anon_swap_in(struct page *page, void *kva)
 {
-	struct anon_page *anon_page = &page->anon;
+	struct anon_page *anon_page = &page->anon; // 해당 페이지를 anon으로 변경
 
-	int page_no = anon_page->swap_index;
+	int page_no = anon_page->swap_index; // anon_page에 들어있는 swap_index
 
 	if (bitmap_test(swap_table, page_no) == false)
 	{
@@ -58,7 +58,7 @@ anon_swap_in(struct page *page, void *kva)
 	{
 		disk_read(swap_disk, page_no * SECTORS_PER_PAGE + i, kva + DISK_SECTOR_SIZE * i);
 	}
-	bitmap_set(swap_table, page_no, false);
+	bitmap_set(swap_table, page_no, false); // 스왑 슬롯이 더 더이상 사용중이지 않다 => 메모리에 올라갔다.
 	return true;
 }
 

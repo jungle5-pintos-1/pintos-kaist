@@ -49,7 +49,7 @@ static bool
 file_backed_swap_in(struct page *page, void *kva)
 {
 	struct file_page *file_page UNUSED = &page->file;
-	return lazy_load_segment(page, file_page);
+	return lazy_load_segment(page, file_page); // 다시 메모리에 로드
 }
 
 /* Swap out the page by writeback contents to the file. */
