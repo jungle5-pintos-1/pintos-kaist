@@ -130,21 +130,48 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 
 /* Get the struct frame, that will be evicted. */
 static struct frame *
-vm_get_victim (void) {
+vm_get_victim(void)
+{
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	/* TODO: The policy for eviction is up to you. */
+	struct thread *curr = thread_current();
+	struct list_elem *start = list_begin(&frame_table);
 
+	for (start; start != list_end(&frame_table); start = list_next(start))
+	{
+		victim = list_entry(start, struct frame, frame_elem);
+		if (victim->page == NULL) // frame에 할당된 페이지가 없는 경우 (page가 destroy된 경우 )
+		{
+			return victim;
+		}
+		if (pml4_is_accessed(curr->pml4, victim->page->va))
+			pml4_set_accessed(curr->pml4, victim->page->va, 0);
+		else
+		{
+			return victim;
+		}
+	}
 	return victim;
 }
+
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
+	// struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
 
-	return NULL;
+	/*-------------*/
+	//return NULL;
+	struct frame *victim UNUSED = vm_get_victim ();
+
+	if (victim->page) {
+		swap_out(victim->page);
+	}
+
+	return victim;
+	/*-------------*/
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -159,9 +186,16 @@ vm_get_frame (void) {
 	void *kva = palloc_get_page(PAL_USER);
 
 	// todo: FRAME 할당이 실패했을 경우, swap out!
+	// if (kva == NULL) {
+	// 	PANIC("todo");
+	// }
+	/*--------------*/
 	if (kva == NULL) {
-		PANIC("todo");
+		struct frame *victim = vm_evict_frame();
+		victim->page = NULL;
+		return victim;
 	}
+	/*--------------*/
 
 	// 할당된 FRAME 초기화
 	frame = (struct frame *)malloc(sizeof(struct frame));
@@ -308,7 +342,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			continue;
 		}
 
-		/* (2) */
+		/* (2) 부모 프로세스가 가진 PAGE의 type이 VM_FILE일 때 */
 		if (type == VM_FILE) {
 			struct lazy_load_arg *file_aux = malloc(sizeof(struct lazy_load_arg));
 			
@@ -329,7 +363,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			continue;
 		}
 
-		/* (3) 부모 프로세스가 가진 PAGE의 type이 VM_UNINIT이 아닐 때 */
+		/* (3) 부모 프로세스가 가진 PAGE의 type이 VM_UNINIT, VM_FILE이 아닐 때 */
 		else {
 			// 현재 만드는 PAGE는 기다리지 않고 바로 내용을 넣어줄 것이므로 init, aux을 NULL로 정해주기
 			if (!vm_alloc_page(type, upage, writable)) {
